@@ -1,0 +1,393 @@
+// Sampling time
+int stime = ___;
+
+// CAN Bus Shield
+#include <df_can.h>
+#include <SPI.h>
+const int SPI_CS_PIN = 10;
+MCPCAN CAN (SPI_CS_PIN);
+
+// Voltage variables
+int Vval = 0;
+double Vb = 0;
+int Vbmax = ___;   // in Volt
+int Vbmin = ___;   // in Volt
+
+// Current variables
+int Ival = 0;
+double Ib = 0;
+int Ibmax = ___;   // in Ampere
+int Ibmin = ___;    // in Ampere
+
+// NTC variables
+int NTCval = 0;
+float A = ___;
+float B = ___;
+float C = ___;
+float D = ___;
+float Tb = 0;
+float Tbmax = ___;
+float Tbmax2 = ___;// in deg C
+
+// Smoke sensor variables
+int smokeReading = 0;
+int smokeThreshold = ___;
+
+// Acceleration variables
+int accel = 0;
+int acctime = 0;
+int accThreshold = ___;
+
+// Pressure variables
+int pres = 0;
+int presThreshold = ___;
+
+// Speed variables
+float speeds = 0;
+float kmh = 0;
+float error = ___;
+
+// Distance variables
+float distance = 0;
+
+// CAN Bus receive data
+unsigned char len = 0;
+unsigned char buf[8];
+int data_ID = 0;
+int volt_ID = 1001;
+bool voltRcvFlag = 0;
+int current_ID = 1002;
+bool currentRcvFlag = 0;
+int temp_ID = 1003;
+bool tempRcvFlag = 0;
+int smoke_ID = 1004;
+bool smokeRcvFlag = 0;
+int accel_ID = 1005;
+bool accelRcvFlag = 0;
+int pres_ID = 1006;
+bool presRcvFlag = 0;
+bool allFlag = 0;
+
+// Actuator pin
+int relPin = ___;
+int fanPin = ___;
+int extPin = ___;
+
+// Warning flag
+bool CLFlag = 0;
+bool SCFlag = 0;
+bool fireFlag = 0;
+bool overheatFlag = 0;
+bool overvoltageFlag = 0;
+bool undervoltageFlag = 0;
+
+// CAN Bus send data to HMI
+int HMI_ID = 0x540;       // 0x540
+unsigned char HMIBuf[8];
+int flag_ID = 0x500;      // 0x500
+unsigned char flagBuf[8];
+
+void setup() {
+  // put your setup code here, to run once:
+  // Serial begin
+  Serial.begin(___);
+  Serial.print("Looping time = ");
+  Serial.println(stime);
+
+  // CAN Bus Shield initition
+  CANinit();
+
+  // pinMode setup
+  pinMode(relPin, OUTPUT);
+  pinMode(fanPin, OUTPUT);
+  pinMode(extPin, OUTPUT);
+  digitalWrite(relPin, LOW);
+  digitalWrite(fanPin, LOW);
+  digitalWrite(extPin, LOW);
+
+  // Variables declaration in serial
+  Serial.println("Voltage sensor setup");
+  Serial.print("Max voltage = ");
+  Serial.print(Vbmax);
+  Serial.println(" Volt");
+  Serial.print("Min voltage = ");
+  Serial.print(Vbmin);
+  Serial.println(" Volt");
+  Serial.println();
+
+  Serial.println("Current sensor setup");
+  Serial.print("Max current = ");
+  Serial.print(Ibmax);
+  Serial.println(" Ampere");
+  Serial.print("Min current = ");
+  Serial.print(Ibmin);
+  Serial.println(" Ampere");
+  Serial.println();
+
+  Serial.println("Thermistor NTC setup");
+  Serial.print("A = ");
+  Serial.println(A);
+  Serial.print("B = ");
+  Serial.println(B);
+  Serial.print("C = ");
+  Serial.println(C);
+  Serial.print("D = ");
+  Serial.println(D);
+  Serial.println();
+
+  Serial.println("Smoke sensor setup");
+  Serial.print("Smoke sensor threshold = ");
+  Serial.println(smokeThreshold);
+
+  Serial.println("Acceleration sensor setup");
+  Serial.print("Acceleration threshold = ");
+  Serial.print(accThreshold);
+  Serial.println(" G");
+  Serial.println();
+
+  Serial.println("Pressure sensor setup");
+  Serial.print("Pressure threshold = ");
+  Serial.println(presThreshold);
+  Serial.println();
+
+  Serial.print("Average speeds = ");
+  Serial.println(speeds);
+  Serial.println();
+
+  Serial.println("-------------------------------------------------------");
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+  // Reset all receive flag
+  voltRcvFlag = 0;
+  currentRcvFlag = 0;
+  tempRcvFlag = 0;
+  smokeRcvFlag = 0;
+  accelRcvFlag = 0;
+  presRcvFlag = 0;
+  allFlag = 0;
+
+  // Reset all value
+  Vb = 0;
+  Ib = 0;
+  NTCval = 0;
+  smokeReading = 0;
+
+  // Read message from Sensor Module
+  while (allFlag == 0) {
+    checkMessage();
+    if (data_ID == volt_ID) {
+      voltRcvFlag = 1;
+      //Serial.println("Volt received");
+      Vval = doub2dec(buf);
+    } else if (data_ID == current_ID) {
+      currentRcvFlag = 1;
+      //Serial.println("Current received");
+      Ival = doub2dec(buf);
+    } else if (data_ID == temp_ID) {
+      tempRcvFlag = 1;
+      //Serial.println("Temp received");
+      NTCval = doub2dec(buf);
+    } else if (data_ID == smoke_ID) {
+      smokeRcvFlag = 1;
+      //Serial.println("Smoke received");
+      smokeReading = doub2dec(buf);
+    } else if (data_ID == accel_ID) {
+      accelRcvFlag = 1;
+      //Serial.println("Accel received");
+      accel = doub2dec(buf);
+    } else if (data_ID == pres_ID) {
+      presRcvFlag = 1;
+      //Serial.println("Pressure received");
+      pres = doub2dec(buf);
+    }
+    if (voltRcvFlag && currentRcvFlag && tempRcvFlag && smokeRcvFlag && accelRcvFlag && presRcvFlag == 1) {
+      allFlag = 1;
+    }
+  }
+
+  // NTC calculation for battery temperature
+    Serial.println(NTCval);
+  double Vntc = ___;
+  // Serial.println(Vntc);    // Uncomment for debugging
+  double Rntc = (10000 * Vntc) / (5 - Vntc);
+  // Serial.println(Rntc)     // Uncomment for debugging
+  double logR = log(Rntc);
+  // Serial.println(logR);    // Uncomment for debugging
+  Tb = 1 / (A + B * logR + C * pow(logR, 2) + D * pow(logR, 3));
+  Serial.print("Battery temperature = ");
+  Serial.print(Tb);
+  Serial.println(" deg C");
+
+  // Voltage calculation
+  Vb = ___;
+  Serial.print("Battery voltage = ");
+  Serial.print(Vb);
+  Serial.println(" Volt");
+
+  // Current calculation
+  Ib = ___;
+  Ib = abs(Ib);
+  Serial.print("Battery current = ");
+  Serial.print(Ib);
+  Serial.println(" Ampere");
+
+  // Smoke
+  Serial.print("Smoke quantity = ");
+  Serial.println(smokeReading);
+
+  // Acceleration calculation
+  double acc = 0;
+  if (accel > 500 && accel < 524) {
+    accel = 0;
+  }
+  acc = ___;
+  Serial.print("Acceleration = ");
+  Serial.print(acc);
+  Serial.println(" G");
+
+  // Super dececeleration time count
+  if (acc <= -10 && pres >= presThreshold) {
+    acctime = acctime + stime;
+  } else {
+    acctime = 0;
+  }
+  Serial.print("Accel time : ");
+  Serial.print(acctime);
+  Serial.println(" ms");
+  
+  // Speed calculation
+  speeds = ___;
+  kmh = ___;
+  if (kmh < 0) {
+    speeds = 0;
+  }
+  if (kmh > 100) {
+    speeds = ___;
+  }
+  Serial.print("Speed = ");
+  Serial.println(kmh);
+
+  // Position calculation
+  distance = ___;
+  Serial.print("Distance traveled = ");
+  Serial.println(distance);
+  // Reset all warning flag
+  CLFlag = 0;
+  SCFlag = 0;
+  fireFlag = 0;
+  overheatFlag = 0;
+  overvoltageFlag = 0;
+  undervoltageFlag = 0;
+
+  // Pressure
+  Serial.print("Pressure = ");
+  Serial.println(pres);
+
+
+  // Actuator actuate
+  if (Tb >= Tbmax) {
+    overheatFlag = 1;
+    digitalWrite(fanPin, HIGH);
+    Serial.println("WARNING! BATTERY OVERHEAT!");
+    }
+  if (Vb <= Vbmin) {
+    undervoltageFlag = 1;
+    digitalWrite(extPin, HIGH);
+    Serial.println("WARNING! BATTERY UNDERVOLTAGE!");
+    }
+  if (acc <= -10 && acctime >= ___ && pres >= presThreshold) {
+    CLFlag = 1;
+    Serial.println("WARNING! COLLISION DETECTED!");
+  }
+  if (Tb > Tbmax2 && Ib >= Ibmax) {
+    SCFlag = 1;
+    Serial.println("WARNING! OVERCURRENT DETECTED!");
+    }
+  if (Tb > Tbmax2 && (pres >= presThreshold || smokeReading >= smokeThreshold)) {
+    fireFlag = 1;
+    Serial.println("WARNING! FIRE OR GAS DETECTED!");
+    }
+  if (Vb >= Vbmax) {
+    overvoltageFlag = 1;
+    Serial.println("WARNING! BATTERY OVERVOLTAGE!");
+  } 
+  if (CLFlag == 1 || SCFlag == 1 || fireFlag == 1 || overvoltageFlag == 1) {
+    digitalWrite(relPin, HIGH);
+    } else {
+    digitalWrite(relPin, LOW);
+    digitalWrite(fanPin, LOW);
+    digitalWrite(extPin, LOW);
+    Serial.println("All condition normal");
+  }
+  Serial.println("-------------------------------------------------");
+  Serial.println();
+
+  // Send data to HMI
+  
+  HMIBuf[0] = Tb;
+  HMIBuf[1] = Vb;
+  HMIBuf[2] = kmh;
+  HMIBuf[3] = Ib;
+  HMIBuf[4] = distance;
+  
+  
+  CAN.sendMsgBuf(HMI_ID, 0, sizeof(HMIBuf), HMIBuf);
+
+  // Send flag to HMI
+  flagBuf[0] = CLFlag;
+  flagBuf[1] = SCFlag;
+  flagBuf[2] = fireFlag;
+  flagBuf[3] = overheatFlag;
+  flagBuf[4] = overvoltageFlag;
+  flagBuf[5] = undervoltageFlag;
+  CAN.sendMsgBuf(flag_ID, 0, sizeof(flagBuf), flagBuf);
+
+  // Delay for stime
+  //delay(stime);
+}
+
+void CANinit() {
+  int count = ___;
+  do {
+    CAN.init();
+    if (CAN_OK == CAN.begin(___)) {
+      Serial.println("CAN Bus Shield initiation OK! Ready to use");
+      break;
+    } else {
+      Serial.println("CAN Bus Shield intiation failed");
+      Serial.println("Please restart Arduino");
+      delay(100);
+      if (count <= 1)
+        Serial.println("Please turn off Arduino");
+    }
+  } while (count--);
+}
+
+void checkMessage() {
+  if (CAN_MSGAVAIL == CAN.checkReceive()) {
+    CAN.readMsgBuf(&len, buf);
+    data_ID = CAN.getCanId();
+  }
+}
+
+int doub2dec(unsigned char doub[8]) {
+  int dec = 0;
+  int bufint[8];
+  for (int i = 0; i < 8; i++) {
+    bufint[i] = ___;
+  }
+
+  for (int i = 0; i < 4; i++) {
+    if (bufint[2 * i] == bufint[2 * i + 1]) {
+      dec = ___;
+    }
+  }
+  if (dec > 99) {
+    dec = ___;
+  }
+  return dec;
+}
